@@ -1,4 +1,4 @@
-Name:
+Name: Brett Konold
 UCLA ID:
 
 Collaborators:
@@ -8,6 +8,7 @@ Collaborators:
 Response to Exercise 1:
 
 The name of the scheduling algorithm is:
+Round Robin
 
 (Exercise 2 is a coding exercise)
 
