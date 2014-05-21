@@ -73,6 +73,8 @@ start(void)
 	for (i = 0; i < NPROCS; i++) {
 		proc_array[i].p_pid = i;
 		proc_array[i].p_state = P_EMPTY;
+		// algorithm 2
+		proc_array[i].p_priority = i;
 	}
 
 	// Set up process descriptors (the proc_array[])
@@ -147,11 +149,12 @@ interrupt(registers_t *reg)
 		current->p_exit_status = reg->reg_eax;
 		schedule();
 
-	case INT_SYS_USER1:
+	case INT_SYS_SETPRIORITY:
 		// 'sys_user*' are provided for your convenience, in case you
 		// want to add a system call.
 		/* Your code here (if you want). */
-		run(current);
+		current->p_priority = current->p_registers.reg_eax;
+		schedule();
 
 	case INT_SYS_USER2:
 		/* Your code here (if you want). */
@@ -206,6 +209,19 @@ schedule(void)
 				if (proc_array[pid].p_state == P_RUNNABLE)
 					run(&proc_array[pid]);
 		}
+	else if (scheduling_algorithm == 2) {
+		while (1) {
+			int highest = ~(1 << 31);
+			int i;
+			for (i = 1; i < NPROCS; i++)
+				if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_priority < highest) 
+					highest = proc_array[i].p_priority;
+			// to alternate b/w multiple highest priority processes
+			pid = (pid + 1) % NPROCS;
+			if (proc_array[pid].p_state == P_RUNNABLE && proc_array[pid].p_priority == highest)
+				run(&proc_array[pid]);
+		}
+	}
 
 	// If we get here, we are running an unknown scheduling algorithm.
 	cursorpos = console_printf(cursorpos, 0x100, "\nUnknown scheduling algorithm %d\n", scheduling_algorithm);
