@@ -50,6 +50,31 @@ process_t *current;
 int scheduling_algorithm;
 
 
+// random number generator
+uint32_t seed;
+
+void
+srand(uint32_t s)
+{
+	seed = s;
+}
+
+uint32_t 
+rand(void)
+{
+	seed = (seed * 1103515245 + 12345);
+	return seed;
+}
+
+unsigned long long
+time(void)
+{
+	uint32_t top, bot;
+	asm volatile("rdtsc\n" : "=a" (bot), "=d" (top) : : "cc", "memory");
+	return ((unsigned long long) bot) | (((unsigned long long)top) << 32);
+}
+
+
 /*****************************************************************************
  * start
  *
@@ -65,7 +90,7 @@ start(void)
 
 	// Set up hardware (schedos-x86.c)
 	segments_init();
-	interrupt_controller_init(0);
+	interrupt_controller_init(1);
 	console_clear();
 
 	// Initialize process descriptors as empty
@@ -100,8 +125,13 @@ start(void)
 	// console's first character (the upper left).
 	cursorpos = (uint16_t *) 0xB8000;
 
+	//initialize cursor lock to unlocked
+	cursor_lock = 0;
+
 	// Initialize the scheduling algorithm.
-	scheduling_algorithm = 3;
+	scheduling_algorithm = 4;
+
+	srand(time());
 
 	// Switch to the first process.
 	run(&proc_array[1]);
@@ -158,14 +188,17 @@ interrupt(registers_t *reg)
 		schedule();
 
 	case INT_SYS_SETSHARE: {
-		if (current->p_registers.reg_eax == 0)
+		if (current->p_registers.reg_eax <= 0)
 			current->p_registers.reg_eax = -1;
 		else {
 			current->p_share = current->p_registers.reg_eax;
 			current->p_registers.reg_eax = 0;
-			schedule();
-		}
+		} 
+		schedule();
 	}
+	case INT_SYS_PRINTC:
+		*cursorpos++ = current->p_registers.reg_eax;
+		run(current);
 	case INT_CLOCK:
 		// A clock interrupt occurred (so an application exhausted its
 		// time quantum).
@@ -178,8 +211,6 @@ interrupt(registers_t *reg)
 
 	}
 }
-
-
 
 /*****************************************************************************
  * schedule
@@ -257,6 +288,23 @@ schedule(void)
 				proc_array[i].p_sched_count++;
 				run(&proc_array[i]);
 			}
+		}
+
+		while (1);
+	}
+	// Exercise 7. Lottery scheduling
+	else if (scheduling_algorithm == 4) {
+		int total_shares = 0;
+		int i;
+		for (i = 0; i < NPROCS; i++)
+			total_shares += proc_array[i].p_share;
+
+		int r = rand() % total_shares;
+
+		for (i = 0; i < NPROCS; i++) {
+			if (r >= total_shares - proc_array[i].p_share)
+				run(&proc_array[i]);
+			total_shares -= proc_array[i].p_share;
 		}
 
 		while (1);

@@ -1,7 +1,6 @@
 #ifndef WEENSYOS_SCHEDOS_H
 #define WEENSYOS_SCHEDOS_H
 #include "types.h"
-
 /*****************************************************************************
  * schedos.h
  *
@@ -16,10 +15,13 @@
 #define INT_SYS_EXIT		49
 #define INT_SYS_SETPRIORITY 50
 #define INT_SYS_SETSHARE	51
+#define INT_SYS_PRINTC		52
 
 
 // The current screen cursor position (stored at memory location 0x198000).
 
 extern uint16_t * volatile cursorpos;
+
+extern uint32_t cursor_lock;
 
 #endif

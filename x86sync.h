@@ -84,4 +84,17 @@ fetch_and_add(uint32_t *addr, uint32_t delta)
 	return delta;
 }
 
+void 
+lock_acquire(uint32_t* l)
+{
+	while (atomic_swap(l, 1) != 0)
+		continue;
+}
+
+void
+lock_release(uint32_t* l)
+{
+	atomic_swap(l, 0);
+}
+
 #endif /* !WEENSYOS_X86SYNC_H */

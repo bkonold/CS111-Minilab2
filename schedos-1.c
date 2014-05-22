@@ -1,6 +1,5 @@
 #include "schedos-app.h"
 #include "x86sync.h"
-
 /*****************************************************************************
  * schedos-1
  *
@@ -14,6 +13,12 @@
  *
  *****************************************************************************/
 
+/***** Exercise 6. Uncomment to enable *****/
+// #define EX6
+
+/***** Exercise 8. Uncomment to enable *****/
+#define EX8
+
 #ifndef PRINTCHAR
 #define PRINTCHAR	('1' | 0x0C00)
 #endif
@@ -25,7 +30,15 @@ start(void)
 
 	for (i = 0; i < RUNCOUNT; i++) {
 		// Write characters to the console, yielding after each one.
+#if defined(EX6) && !defined(EX8)
+		sys_printc(PRINTCHAR);
+#elif defined(EX8)
+		lock_acquire(&cursor_lock);
 		*cursorpos++ = PRINTCHAR;
+		lock_release(&cursor_lock);
+#else
+		*cursorpos++ = PRINTCHAR;
+#endif
 		sys_yield();
 	}
 

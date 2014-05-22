@@ -75,4 +75,4 @@ clock: sync=none, time0=946681200 # jan 1, 2000
 keyboard_serial_delay: 10
 
 # ONLY FOR DESKTOP
-display_library: sdl
+# display_library: sdl
