@@ -210,13 +210,13 @@ schedule(void)
 					run(&proc_array[pid]);
 		}
 	else if (scheduling_algorithm == 2) {
+		int highest = ~(1 << 31);
+		int i;
+		for (i = 1; i < NPROCS; i++)
+			if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_priority < highest) 
+				highest = proc_array[i].p_priority;
+		// to alternate b/w multiple highest priority processes
 		while (1) {
-			int highest = ~(1 << 31);
-			int i;
-			for (i = 1; i < NPROCS; i++)
-				if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_priority < highest) 
-					highest = proc_array[i].p_priority;
-			// to alternate b/w multiple highest priority processes
 			pid = (pid + 1) % NPROCS;
 			if (proc_array[pid].p_state == P_RUNNABLE && proc_array[pid].p_priority == highest)
 				run(&proc_array[pid]);
