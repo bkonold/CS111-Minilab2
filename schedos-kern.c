@@ -90,7 +90,7 @@ start(void)
 
 	// Set up hardware (schedos-x86.c)
 	segments_init();
-	interrupt_controller_init(1);
+	interrupt_controller_init(0);
 	console_clear();
 
 	// Initialize process descriptors as empty
@@ -297,14 +297,15 @@ schedule(void)
 		int total_shares = 0;
 		int i;
 		for (i = 0; i < NPROCS; i++)
-			total_shares += proc_array[i].p_share;
+			total_shares += proc_array[i].p_state == P_RUNNABLE? proc_array[i].p_share : 0;
 
 		int r = rand() % total_shares;
 
 		for (i = 0; i < NPROCS; i++) {
-			if (r >= total_shares - proc_array[i].p_share)
+			if (proc_array[i].p_state == P_RUNNABLE && r >= total_shares - proc_array[i].p_share)
 				run(&proc_array[i]);
-			total_shares -= proc_array[i].p_share;
+			else if (proc_array[i].p_state == P_RUNNABLE)
+				total_shares -= proc_array[i].p_share;
 		}
 
 		while (1);
