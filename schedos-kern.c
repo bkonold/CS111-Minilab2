@@ -74,7 +74,8 @@ start(void)
 		proc_array[i].p_pid = i;
 		proc_array[i].p_state = P_EMPTY;
 		// algorithm 2
-		proc_array[i].p_priority = i;
+		proc_array[i].p_priority = proc_array[i].p_share = i;
+		proc_array[i].p_sched_count = 0;
 	}
 
 	// Set up process descriptors (the proc_array[])
@@ -100,7 +101,7 @@ start(void)
 	cursorpos = (uint16_t *) 0xB8000;
 
 	// Initialize the scheduling algorithm.
-	scheduling_algorithm = 0;
+	scheduling_algorithm = 3;
 
 	// Switch to the first process.
 	run(&proc_array[1]);
@@ -156,10 +157,15 @@ interrupt(registers_t *reg)
 		current->p_priority = current->p_registers.reg_eax;
 		schedule();
 
-	case INT_SYS_USER2:
-		/* Your code here (if you want). */
-		run(current);
-
+	case INT_SYS_SETSHARE: {
+		if (current->p_registers.reg_eax == 0)
+			current->p_registers.reg_eax = -1;
+		else {
+			current->p_share = current->p_registers.reg_eax;
+			current->p_registers.reg_eax = 0;
+			schedule();
+		}
+	}
 	case INT_CLOCK:
 		// A clock interrupt occurred (so an application exhausted its
 		// time quantum).
@@ -221,6 +227,39 @@ schedule(void)
 			if (proc_array[pid].p_state == P_RUNNABLE && proc_array[pid].p_priority == highest)
 				run(&proc_array[pid]);
 		}
+	}
+	else if (scheduling_algorithm == 3) {
+		int reset = 1;
+		int i;
+		for (i = 1; i < NPROCS; i++) {
+			if ((proc_array[i].p_state == P_RUNNABLE || proc_array[i].p_state == P_BLOCKED)
+				&& proc_array[i].p_share > proc_array[i].p_sched_count) {
+				reset = 0;
+				break;
+			}
+		}
+
+		int highest = 1;
+		for (i = 0; i < NPROCS; i++) {
+			if (reset)
+				proc_array[i].p_sched_count = 0;
+
+			if (proc_array[i].p_share > highest 
+				&& proc_array[i].p_state == P_RUNNABLE
+				&& proc_array[i].p_share > proc_array[i].p_sched_count)
+				highest = proc_array[i].p_share;	
+		}
+
+		for (i = 0; i < NPROCS; i++) {
+			if (proc_array[i].p_state == P_RUNNABLE 
+				&& proc_array[i].p_share == highest
+				&& proc_array[i].p_share > proc_array[i].p_sched_count) {
+				proc_array[i].p_sched_count++;
+				run(&proc_array[i]);
+			}
+		}
+
+		while (1);
 	}
 
 	// If we get here, we are running an unknown scheduling algorithm.

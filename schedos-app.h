@@ -69,4 +69,15 @@ sys_setpriority(int p)
 		     : "cc", "memory");
 }
 
+static inline int
+sys_setshare(uint32_t s)
+{
+	int retval;
+	asm volatile("int %0\n"
+		   : "=a" (retval) 
+		   : "i" (INT_SYS_SETSHARE), "a" (s)
+		   : "cc", "memory");
+	return retval;
+}
+
 #endif
