@@ -34,7 +34,7 @@ Did you complete Exercise 4A, Exercise 4B, or both for extra credit?
 
 
 Exercise 5:
-
+Process 4. It is interrupted before it prints '4' to the console window.
 
 (Exercise 6 is a coding exercise)
 
