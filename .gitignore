@@ -26,3 +26,5 @@
 obj/
 
 mkbootdisk
+
+*.tar.gz

@@ -1,5 +1,5 @@
 Name: Brett Konold
-UCLA ID:
+UCLA ID: 
 
 Collaborators:
 
@@ -10,37 +10,287 @@ Response to Exercise 1:
 The name of the scheduling algorithm is:
 Round Robin
 
-(Exercise 2 is a coding exercise)
 
-else if (scheduling_algorithm == 1)
+Exercise 2 (coding exercise):
+
+added to schedos-kern.c::schedule():
+
+else if (scheduling_algorithm == 1) {
 	while (1) {
 		for (pid = 0; pid < NPROCS; pid++)
 			if (proc_array[pid].p_state == P_RUNNABLE)
 				run(&proc_array[pid]);
 	}
+}
+
+added to schedos-1.c:
+
+sys_exit(0); // replaced the infinite loop of sys_yield()
+
 
 Response to Exercise 3:
 
 Average turnaround time for scheduling_algorithm 0:
+	(1280 + 1279 + 1278 + 1277) / 4 = 1278.5ms
+
 Average turnaround time for scheduling_algorithm 1:
+	480ms + 320ms = 800ms
 
 Average wait time for scheduling_algorithm 0:
+	(0 + 1 + 2 + 3) / 4 = 1.5ms
+
 Average wait time for scheduling_algorithm 1:
+	(0 + 320 + 640 + 960) / 4 = 480ms
 
 
-Exercise 4:
+Exercise 4 (coding exercise):
 
 Did you complete Exercise 4A, Exercise 4B, or both for extra credit?
+	-I completed both 4A and 4B.
+
+code for 4A:
+
+added in schedos.h:
+
+	#define INT_SYS_SETPRIORITY 50
+
+added to schedos-kern.h::struct process:
+
+	int p_priority;
+
+added in schedos-app.h:
+
+	static inline void
+	sys_setpriority(int p)
+	{
+		asm volatile("int %0\n"
+			   : : "i" (INT_SYS_SETPRIORITY), "a" (p)
+			     : "cc", "memory");
+	}
+
+added in schedos-kern.c::start(), in process descriptor initialization loop: 
+
+	proc_array[i].p_priority = i;
+
+added in schedos-kern.c::interrupt():
+
+	case INT_SYS_SETPRIORITY:
+		current->p_priority = (int) current->p_registers.reg_eax;
+		schedule();
+
+added in schedos-kern.c::schedule():
+
+	else if (scheduling_algorithm == 2) {
+		int highest = ~(1 << 31);
+
+		int i;
+		for (i = 1; i < NPROCS; i++)
+			if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_priority < highest) 
+				highest = proc_array[i].p_priority;
+
+		while (1) {
+			// start at next pid to alternate b/w highest priority processes
+			pid = (pid + 1) % NPROCS;
+			if (proc_array[pid].p_state == P_RUNNABLE && proc_array[pid].p_priority == highest)
+				run(&proc_array[pid]);
+		}
+	}
+
+
+code for 4B:
+
+added in schedos.h:
+	
+	#define INT_SYS_SETSHARE	51
+
+added in schedos-app.h:
+
+	// returns -1 on error, 0 on success
+	static inline int
+	sys_setshare(uint32_t s)
+	{
+		int retval;
+		asm volatile("int %0\n"
+			   : "=a" (retval) 
+			   : "i" (INT_SYS_SETSHARE), "a" (s)
+			   : "cc", "memory");
+		return retval;
+	}
+
+added in schedos-kern.h::struct process:
+
+	uint32_t p_share; // share of cpu time for process
+	uint32_t p_sched_count; // number of times process has been scheduled
+
+added in schedos-kern.c::start(), in process descriptor initialization loop:
+	
+	proc_array[i].p_priority = proc_array[i].p_share = i;
+	proc_array[i].p_sched_count = 0;
+
+added in schedos-kern.c::interrupt():
+
+	case INT_SYS_SETSHARE: {
+		// is equivalent to killing. disallow this.
+		if (current->p_registers.reg_eax == 0)
+			current->p_registers.reg_eax = -1;
+		else {
+			current->p_share = current->p_registers.reg_eax;
+			current->p_registers.reg_eax = 0;
+		}
+		schedule();
+	}
+
+added in schedos-kern.c::schedule():
+
+	else if (scheduling_algorithm == 3) {
+		while (1) {
+			int i;
+			// try to schedule process that has not yet consumed its shares
+			for (i = 0; i < NPROCS; i++) {
+				if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_sched_count < proc_array[i].p_share) {
+					proc_array[i].p_sched_count++;
+					run(&proc_array[i]);
+				}
+			}
+
+			// if we get here then either there are no runnable processes or each process has consumed its share and can have its count set back to zero
+			for (i = 0; i < NPROCS; i++) {
+				if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_sched_count == proc_array[i].p_share)
+					proc_array[i].p_sched_count = 0;
+			}
+		}
+	}
+
 
 
 Exercise 5:
 Process 4. It is interrupted before it prints '4' to the console window.
 
-(Exercise 6 is a coding exercise)
+Exercise 6 (coding exercise):
 
+	For exercise 6 I decided to implement a system call. I pass the character to be printed to the kernel via register eax. 
+The cursorpos variable is accessible to the kernel already so it is not passed into the system call.
 
-Anything else you'd like us to know:
+added in schedos.h:
 
+	#define INT_SYS_PRINTC		52
+
+added in schedos-app.h:
+
+	static inline void
+	sys_printc(uint16_t c)
+	{
+		asm volatile("int %0\n" 
+				: : "i" (INT_SYS_PRINTC), "a" (c) 
+				: "cc", "memory");
+	}
+
+added in schedos-kern.c::interrupt():
+
+	case INT_SYS_PRINTC:
+		*cursorpos++ = (uint16_t) current->p_registers.reg_eax;
+		run(current);
+
+added in schedos-1.c:
+
+	#define EX6
+
+	#if defined(EX6)
+		sys_printc(PRINTCHAR);
+	#elif
+		*cursorpos++ = PRINTCHAR;
+	#endif
 
 
 Extra credit exercises:
+
+Exercise 7:
+
+I decided to implement lottery scheduling. I reuse process's p_share attribute to indicate the number of tickets a process has.
+Each process's p_share is set as per exercise 4B (process 1 has share 1, process 2 has 2, etc.). 
+Thus, the output of using this scheduling algorithm is similar to that of 4B, but incorporates randomness.
+To generate (pseudo) random numbers, I used a Linear Congruential Generator using the same constants used by glibc.
+As per Tuan's post on piazza, in order for the seed value (output of read_cycle_counter()) to be different each time, qemmu must be used instead of bochs.
+
+added in schedos-kern.c:
+
+	// global var for rng seed value
+	uint32_t seed;
+
+	void
+	srand(uint32_t s)
+	{
+		seed = s;
+	}
+
+	uint32_t 
+	rand(void)
+	{
+		seed = (seed * 1103515245 + 12345);
+		return seed;
+	}
+
+added in schedos-kern.c::start():
+
+	srand(read_cycle_counter());
+
+added in schedos-kern.c::schedule():
+
+	else if (scheduling_algorithm == 4) {
+		int total_shares = 0;
+		int i;
+		for (i = 0; i < NPROCS; i++)
+			total_shares += proc_array[i].p_state == P_RUNNABLE ? proc_array[i].p_share : 0;
+
+		int r = rand() % total_shares;
+
+		for (i = 0; i < NPROCS; i++) {
+			if (proc_array[i].p_state == P_RUNNABLE && r >= total_shares - proc_array[i].p_share)
+				run(&proc_array[i]);
+			else if (proc_array[i].p_state == P_RUNNABLE)
+				total_shares -= proc_array[i].p_share;
+		}
+
+		while (1);
+	}
+
+Exercise 8:
+
+For exercise 8 I decided to implement locks.
+
+added in schedos.h:
+
+	extern uint32_t cursor_lock;
+
+added in schedos-symbols.ld:
+	
+	PROVIDE(cursor_lock = 0x198004);
+
+added in x86sync.h:
+
+	void 
+	lock_acquire(uint32_t* l)
+	{
+		while (atomic_swap(l, 1) != 0)
+			continue;
+	}
+
+	void
+	lock_release(uint32_t* l)
+	{
+		atomic_swap(l, 0);
+	}
+
+added in schedos-1.c:
+	
+	#define EX8
+
+	#if defined(EX6) && !defined(EX8)
+		sys_printc(PRINTCHAR);
+	#elif defined(EX8)
+		lock_acquire(&cursor_lock);
+		*cursorpos++ = PRINTCHAR;
+		lock_release(&cursor_lock);
+	#else
+		*cursorpos++ = PRINTCHAR;
+	#endif

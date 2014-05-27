@@ -13,11 +13,15 @@
  *
  *****************************************************************************/
 
-/***** Exercise 6. Uncomment to enable *****/
+/***********************************/
+/* Exercise 6. Uncomment to enable */
+/***********************************/
 // #define EX6
 
-/***** Exercise 8. Uncomment to enable *****/
-#define EX8
+/***********************************/
+/* Exercise 8. Uncomment to enable */
+/***********************************/
+// #define EX8
 
 #ifndef PRINTCHAR
 #define PRINTCHAR	('1' | 0x0C00)
@@ -42,5 +46,5 @@ start(void)
 		sys_yield();
 	}
 
-	sys_exit(0);
+	sys_exit(0); // replaced the infinite loop of sys_yield()
 }

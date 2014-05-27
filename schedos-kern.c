@@ -66,15 +66,6 @@ rand(void)
 	return seed;
 }
 
-unsigned long long
-time(void)
-{
-	uint32_t top, bot;
-	asm volatile("rdtsc\n" : "=a" (bot), "=d" (top) : : "cc", "memory");
-	return ((unsigned long long) bot) | (((unsigned long long)top) << 32);
-}
-
-
 /*****************************************************************************
  * start
  *
@@ -129,9 +120,9 @@ start(void)
 	cursor_lock = 0;
 
 	// Initialize the scheduling algorithm.
-	scheduling_algorithm = 4;
+	scheduling_algorithm = 0;
 
-	srand(time());
+	srand(read_cycle_counter());
 
 	// Switch to the first process.
 	run(&proc_array[1]);
@@ -184,11 +175,12 @@ interrupt(registers_t *reg)
 		// 'sys_user*' are provided for your convenience, in case you
 		// want to add a system call.
 		/* Your code here (if you want). */
-		current->p_priority = current->p_registers.reg_eax;
+		current->p_priority = (int) current->p_registers.reg_eax;
 		schedule();
 
 	case INT_SYS_SETSHARE: {
-		if (current->p_registers.reg_eax <= 0)
+		// is equivalent to killing. disallow this.
+		if (current->p_registers.reg_eax == 0)
 			current->p_registers.reg_eax = -1;
 		else {
 			current->p_share = current->p_registers.reg_eax;
@@ -197,8 +189,9 @@ interrupt(registers_t *reg)
 		schedule();
 	}
 	case INT_SYS_PRINTC:
-		*cursorpos++ = current->p_registers.reg_eax;
+		*cursorpos++ = (uint16_t) current->p_registers.reg_eax;
 		run(current);
+
 	case INT_CLOCK:
 		// A clock interrupt occurred (so an application exhausted its
 		// time quantum).
@@ -240,64 +233,52 @@ schedule(void)
 			if (proc_array[pid].p_state == P_RUNNABLE)
 				run(&proc_array[pid]);
 		}
+	// exercise 2
 	else if (scheduling_algorithm == 1)
 		while (1) {
 			for (pid = 0; pid < NPROCS; pid++)
 				if (proc_array[pid].p_state == P_RUNNABLE)
 					run(&proc_array[pid]);
 		}
+	// exercise 4A. Priority Scheduling (processes can set priority).
 	else if (scheduling_algorithm == 2) {
 		int highest = ~(1 << 31);
 		int i;
 		for (i = 1; i < NPROCS; i++)
 			if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_priority < highest) 
 				highest = proc_array[i].p_priority;
-		// to alternate b/w multiple highest priority processes
+		// start at next pid to alternate b/w highest priority processes
 		while (1) {
 			pid = (pid + 1) % NPROCS;
 			if (proc_array[pid].p_state == P_RUNNABLE && proc_array[pid].p_priority == highest)
 				run(&proc_array[pid]);
 		}
 	}
+	// exercise 4B. Proportional Share Scheduling
 	else if (scheduling_algorithm == 3) {
-		int reset = 1;
-		int i;
-		for (i = 1; i < NPROCS; i++) {
-			if ((proc_array[i].p_state == P_RUNNABLE || proc_array[i].p_state == P_BLOCKED)
-				&& proc_array[i].p_share > proc_array[i].p_sched_count) {
-				reset = 0;
-				break;
+		while (1) {
+			int i;
+			// try to schedule process that has not yet consumed its shares
+			for (i = 0; i < NPROCS; i++) {
+				if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_sched_count < proc_array[i].p_share) {
+					proc_array[i].p_sched_count++;
+					run(&proc_array[i]);
+				}
+			}
+
+			// if we get here then either there are no runnable processes or each process has consumed its share and can have its count set back to zero
+			for (i = 0; i < NPROCS; i++) {
+				if (proc_array[i].p_state == P_RUNNABLE && proc_array[i].p_sched_count == proc_array[i].p_share)
+					proc_array[i].p_sched_count = 0;
 			}
 		}
-
-		int highest = 1;
-		for (i = 0; i < NPROCS; i++) {
-			if (reset)
-				proc_array[i].p_sched_count = 0;
-
-			if (proc_array[i].p_share > highest 
-				&& proc_array[i].p_state == P_RUNNABLE
-				&& proc_array[i].p_share > proc_array[i].p_sched_count)
-				highest = proc_array[i].p_share;	
-		}
-
-		for (i = 0; i < NPROCS; i++) {
-			if (proc_array[i].p_state == P_RUNNABLE 
-				&& proc_array[i].p_share == highest
-				&& proc_array[i].p_share > proc_array[i].p_sched_count) {
-				proc_array[i].p_sched_count++;
-				run(&proc_array[i]);
-			}
-		}
-
-		while (1);
 	}
 	// Exercise 7. Lottery scheduling
 	else if (scheduling_algorithm == 4) {
 		int total_shares = 0;
 		int i;
 		for (i = 0; i < NPROCS; i++)
-			total_shares += proc_array[i].p_state == P_RUNNABLE? proc_array[i].p_share : 0;
+			total_shares += proc_array[i].p_state == P_RUNNABLE ? proc_array[i].p_share : 0;
 
 		int r = rand() % total_shares;
 

@@ -69,6 +69,7 @@ sys_setpriority(int p)
 		     : "cc", "memory");
 }
 
+// returns -1 on error, 0 on success
 static inline int
 sys_setshare(uint32_t s)
 {
